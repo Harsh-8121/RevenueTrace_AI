@@ -17,6 +17,10 @@ def _load_seed() -> None:
     if _loaded:
         return
 
+    if not DATA_PATH.exists():
+        _loaded = True
+        return
+
     payload = json.loads(DATA_PATH.read_text(encoding="utf-8"))
     for item in payload["contracts"]:
         contract = ContractRecord(**item, source="seed")
