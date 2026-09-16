@@ -1,0 +1,6 @@
+record_type,contract_id,customer_name,amount,reference_id,date,due_date,terms
+contract,CTR-2001,Atlas Software,120000,,2025-04-01,,Net 30
+order,CTR-2001,Atlas Software,120000,SO-9001,2025-04-05,,
+delivery,CTR-2001,Atlas Software,118000,DL-9001,2025-04-20,,
+invoice,CTR-2001,Atlas Software,115000,INV-9001,2025-04-25,2025-05-25,
+payment,CTR-2001,Atlas Software,110000,PAY-9001,2025-05-30,,

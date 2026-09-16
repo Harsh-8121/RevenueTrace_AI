@@ -1,54 +1,69 @@
 # RevenueTrace AI
 
-RevenueTrace AI is an AI-powered Contract-to-Cash investigation platform that detects revenue leakage by tracing discrepancies across contracts, orders, deliveries, invoices, and payments. It uses LLMs to understand business rules, investigate anomalies, identify root causes, quantify financial impact, and generate evidence-backed recommendations.
+RevenueTrace AI is an AI-powered Contract-to-Cash investigation platform that detects revenue leakage by tracing discrepancies across contracts, orders, deliveries, invoices, and payments.
+
+## Features
+
+- Contract-to-cash dashboard with portfolio metrics
+- Multi-contract investigation engine across order, delivery, billing, and collections gaps
+- Investigation history with evidence-backed findings and recommendations
+- Data import via JSON, CSV, or PDF upload
+- Optional LLM-enhanced executive summaries when `OPENAI_API_KEY` is configured
 
 ## Project structure
 
-- `backend/` — FastAPI service for contracts and investigations
-- `frontend/` — React dashboard for running investigations and viewing findings
-- `scripts/install.sh` — installs Python and Node dependencies
+- `backend/` — FastAPI application, investigation engine, parsers, and seed data
+- `frontend/` — React dashboard
+- `api/index.py` — Vercel serverless entrypoint
+- `scripts/install.sh` — local dependency installation
 
-## Prerequisites
-
-- Python 3.12+
-- Node.js 22+
-
-## Setup
+## Local development
 
 ```bash
 bash scripts/install.sh
-```
-
-## Run locally
-
-Start the API:
-
-```bash
 python3 -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Start the web app:
-
-```bash
 npm --prefix frontend run dev
 ```
 
-Open http://localhost:5173 and run an investigation against the sample contract `CTR-1001`.
+Open http://localhost:5173
 
 ## Deploy to Vercel
 
 1. Import the GitHub repository in Vercel.
-2. Leave **Root Directory** as the repository root (`./`).
-3. Vercel will use `vercel.json` to build the frontend and deploy the Python API under `/api`.
+2. Keep **Root Directory** as the repository root (`./`).
+3. Redeploy from the latest `main` branch.
 
-The frontend is served from `frontend/dist`, and API routes are handled by the FastAPI app via `api/index.py`.
+Optional environment variable:
+
+- `OPENAI_API_KEY` — enables LLM-enhanced investigation summaries
+
+## Data input formats
+
+### JSON
+
+Upload a file with a `contracts` array matching the structure in `backend/data/seed_contracts.json`.
+
+### CSV
+
+Required columns: `record_type`, `contract_id`, `customer_name`, `amount`
+
+Supported `record_type` values: `contract`, `order`, `delivery`, `invoice`, `payment`
+
+See `backend/data/sample_upload.csv` for an example.
+
+### PDF
+
+Upload a contract PDF. The parser extracts contract ID, customer, amounts, and payment terms heuristically.
 
 ## API
 
 | Endpoint | Description |
 | --- | --- |
 | `GET /api/health` | Health check |
-| `GET /api/contracts` | List available contracts |
-| `POST /api/investigations` | Run an investigation for a contract |
-| `GET /api/investigations` | List investigations from the current session |
-| `GET /api/investigations/{id}` | Fetch a single investigation |
+| `GET /api/dashboard` | Portfolio metrics |
+| `GET /api/contracts` | List contracts |
+| `GET /api/contracts/{id}` | Contract detail |
+| `POST /api/investigations` | Run investigation |
+| `GET /api/investigations` | List investigations |
+| `GET /api/investigations/{id}` | Investigation detail |
+| `POST /api/uploads` | Import JSON, CSV, or PDF |
