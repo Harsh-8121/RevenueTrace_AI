@@ -5,4 +5,5 @@ __pycache__/
 .env
 .venv/
 frontend/dist/
+frontend/.vite/
 *.tsbuildinfo
