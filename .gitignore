@@ -1,9 +1,0 @@
-node_modules/
-dist/
-__pycache__/
-*.py[cod]
-.env
-.venv/
-frontend/dist/
-frontend/.vite/
-*.tsbuildinfo

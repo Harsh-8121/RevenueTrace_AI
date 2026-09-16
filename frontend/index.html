@@ -1,12 +1,946 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RevenueTrace AI</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+﻿<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50 text-slate-900">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contract-to-Cash AI Investigator | Revenue Leakage Detection Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+          }
+        }
+      }
+    }
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.0/dist/cdn.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f8fafc; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased overflow-x-hidden" x-data="c2cApp()" x-init="initApp()">
+  <header class="border-b border-slate-200 bg-white/95 backdrop-blur shadow-xs sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i data-lucide="shield-alert" class="w-6 h-6 text-slate-900"></i>
+        </div>
+        <div>
+          <span class="text-lg font-bold tracking-tight text-slate-900">
+            Contract-to-Cash <span class="text-indigo-600">AI Investigator</span>
+          </span>
+          <p class="text-xs text-slate-500 hidden sm:block">Trace every rupee from contract to cash. Find what fell through the cracks.</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-2 bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5 text-sm">
+          <i data-lucide="building-2" class="w-4 h-4 text-indigo-600"></i>
+          <span class="text-xs text-slate-500">Auditing:</span>
+          <select 
+            class="bg-transparent text-slate-900 font-medium focus:outline-none cursor-pointer"
+            x-model="selectedCustomerId" 
+            @change="loadScenario(selectedCustomerId)">
+            <template x-for="s in scenarios" :key="s.customer_id">
+              <option :value="s.customer_id" x-text="s.customer_name" class="bg-white text-slate-900"></option>
+            </template>
+          </select>
+        </div>
+        <button 
+          @click="showApiKeyModal = true"
+          class="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition"
+          :class="isGeminiConfigured ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-indigo-50 border-indigo-200 text-indigo-700'">
+          <span class="w-2 h-2 rounded-full" :class="isGeminiConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-indigo-400'"></span>
+          <span x-text="isGeminiConfigured ? 'Gemini 3.8 Flash' : 'Expert Forensic Engine'"></span>
+          <i data-lucide="settings" class="w-3.5 h-3.5 ml-1 text-slate-500"></i>
+        </button>
+        <button 
+          @click="openAuditReport()"
+          class="flex items-center space-x-1.5 bg-white hover:bg-slate-100 text-slate-900 shadow-xs px-3 py-1.5 rounded-lg text-xs font-medium transition shadow">
+          <i data-lucide="file-text" class="w-4 h-4 text-emerald-600"></i>
+          <span>Audit Report</span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+    <div x-show="loading" class="flex items-center justify-center py-20">
+      <div class="flex flex-col items-center space-y-3">
+        <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-sm text-slate-500 font-medium">Reconciling Contract, Orders, Telemetry, Invoices & Payments...</p>
+      </div>
+    </div>
+    <div x-show="!loading" class="space-y-8" x-cloak>
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
+          <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Contracted Value</div>
+          <div class="mt-2 text-2xl font-bold text-slate-900" x-text="formatCurrency(metrics.contracted_value)"></div>
+          <div class="mt-1 flex items-center text-xs text-indigo-600">
+            <i data-lucide="file-check" class="w-3.5 h-3.5 mr-1"></i>
+            <span x-text="currentContract?.contract_id || 'Contract Bound'"></span>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
+          <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Realized Cash</div>
+          <div class="mt-2 text-2xl font-bold text-emerald-600" x-text="formatCurrency(metrics.collected_value)"></div>
+          <div class="mt-1 flex items-center text-xs text-emerald-500">
+            <i data-lucide="check-circle-2" class="w-3.5 h-3.5 mr-1"></i>
+            <span>Bank Settled Funds</span>
+          </div>
+        </div>
+        <div class="bg-red-50/60 border border-red-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
+          <div class="text-xs font-medium text-red-600 uppercase tracking-wider flex items-center justify-between">
+            <span>Identified Leakage</span>
+            <span class="px-1.5 py-0.5 bg-red-900/60 text-red-300 rounded text-[10px] font-bold" x-text="discrepancies.length + ' GAPS'"></span>
+          </div>
+          <div class="mt-2 text-2xl font-bold text-red-600" x-text="formatCurrency(metrics.total_leakage_detected)"></div>
+          <div class="mt-1 flex items-center text-xs text-red-300">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 mr-1"></i>
+            <span>Fell Through Cracks</span>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
+          <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Recoverable Potential</div>
+          <div class="mt-2 text-2xl font-bold text-indigo-300" x-text="formatCurrency(metrics.recoverable_potential)"></div>
+          <div class="mt-1 flex items-center text-xs text-indigo-600">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 mr-1"></i>
+            <span>92% Action Feasibility</span>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Account Risk Tier</div>
+            <div class="mt-2 flex items-center space-x-2">
+              <span class="px-2 py-1 bg-red-500/20 text-red-300 border border-red-500/30 rounded-lg text-xs font-semibold uppercase">High Leakage Risk</span>
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500 truncate mt-2" x-text="currentScenario?.industry"></div>
+        </div>
+      </div>
+      <!-- Trace My Money Waterfall Card -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm relative overflow-hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-200 gap-3">
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-600 text-xs font-semibold uppercase tracking-wider">Flagship Feature</span>
+              <h2 class="text-xl font-bold text-slate-900">Trace My Money</h2>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">
+              End-to-end journey of money from contract entitlement to cash collection. Click any discrepancy to launch AI forensic investigation.
+            </p>
+          </div>
+          <div class="text-xs text-slate-500 flex items-center space-x-4 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            <div class="flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 mr-1.5"></span> Realized Value</div>
+            <div class="flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-red-500 mr-1.5"></span> Revenue Gap / Leakage</div>
+          </div>
+        </div>
+        <div class="py-8 grid grid-cols-1 md:grid-cols-5 gap-4 relative">
+          <template x-for="(stage, idx) in stages" :key="stage.stage_name">
+            <div class="flex flex-col items-center relative group">
+              <div 
+                class="w-full bg-slate-50 border rounded-xl p-4 transition-all duration-200 hover:scale-[1.02] shadow-md flex flex-col justify-between min-h-[150px]"
+                :class="stage.leakage_amount > 0 ? 'border-2 border-red-200 bg-red-50/40' : 'border-slate-200'">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[11px] font-semibold tracking-wider text-slate-500 uppercase" x-text="stage.stage_name"></span>
+                    <span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-700" x-text="idx + 1"></span>
+                  </div>
+                  <div class="mt-2 text-lg font-bold text-slate-900" x-text="formatCurrency(stage.actual_amount)"></div>
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-200/80">
+                  <template x-if="stage.leakage_amount > 0">
+                    <div>
+                      <div class="flex items-center justify-between text-xs text-red-600 font-semibold">
+                        <span>Leakage Gap:</span>
+                        <span x-text="'-' + formatCurrency(stage.leakage_amount)"></span>
+                      </div>
+                      <p class="text-[11px] text-slate-500 mt-1 line-clamp-2" x-text="stage.leakage_reasons[0] || 'Handover discrepancy'"></p>
+                      <button 
+                        @click="investigateStage(stage)"
+                        class="mt-3 w-full flex items-center justify-center space-x-1 py-1.5 px-2 bg-red-100/60 hover:bg-red-900 text-red-200 border border-red-800/80 rounded-lg text-xs font-semibold transition shadow-sm">
+                        <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                        <span>Investigate Gap</span>
+                      </button>
+                    </div>
+                  </template>
+                  <template x-if="stage.leakage_amount === 0">
+                    <div class="flex items-center space-x-1 text-xs text-emerald-600">
+                      <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                      <span>100% Entitlement Retained</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <template x-if="idx < stages.length - 1">
+                <div class="hidden md:block absolute -right-3 top-16 z-10 text-slate-600">
+                  <i data-lucide="chevron-right" class="w-6 h-6"></i>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+        <div class="mt-2 bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-600 flex items-center justify-center">
+              <i data-lucide="compass" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <span class="text-xs font-semibold text-slate-800">Revenue Journey Diagnostic:</span>
+              <span class="text-xs text-slate-500 ml-1" x-text="getJourneyDiagnostic()"></span>
+            </div>
+          </div>
+          <button 
+            @click="investigateFirstDiscrepancy()"
+            class="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500 text-slate-900 text-xs font-semibold rounded-lg shadow-md transition flex items-center space-x-1.5">
+            <i data-lucide="bot" class="w-4 h-4"></i>
+            <span>Run Deep AI Audit</span>
+          </button>
+        </div>
+      </div>
+      <!-- Navigation Tabs -->
+      <div class="border-b border-slate-200">
+        <nav class="flex space-x-8">
+          <button 
+            @click="activeTab = 'discrepancies'" 
+            class="py-3 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition"
+            :class="activeTab === 'discrepancies' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'">
+            <i data-lucide="alert-octagon" class="w-4 h-4"></i>
+            <span>Detected Discrepancies</span>
+            <span class="px-1.5 py-0.5 text-xs rounded-full bg-slate-100 text-slate-700" x-text="discrepancies.length"></span>
+          </button>
+          <button 
+            @click="activeTab = 'contract'" 
+            class="py-3 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition"
+            :class="activeTab === 'contract' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            <span>Contract & Rules Studio</span>
+          </button>
+          <button 
+            @click="activeTab = 'transactions'" 
+            class="py-3 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition"
+            :class="activeTab === 'transactions' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'">
+            <i data-lucide="layers" class="w-4 h-4"></i>
+            <span>Transaction Data Hub</span>
+          </button>
+        </nav>
+      </div>
+      <!-- TAB 1: DETECTED DISCREPANCIES MATRIX -->
+      <div x-show="activeTab === 'discrepancies'" class="space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-base font-semibold text-slate-900">Forensic Discrepancy Register</h3>
+            <p class="text-xs text-slate-500">Identified mismatches between contractual rights and operational execution.</p>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl overflow shadow-xs-hidden shadow-sm">
+          <table class="w-full text-left text-sm text-slate-700">
+            <thead class="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="px-4 py-3">Discrepancy & Type</th>
+                <th class="px-4 py-3">Stage Handover</th>
+                <th class="px-4 py-3">Severity</th>
+                <th class="px-4 py-3">Financial Impact</th>
+                <th class="px-4 py-3">Governing Contract Clause</th>
+                <th class="px-4 py-3 text-right">Forensic Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <template x-for="d in discrepancies" :key="d.discrepancy_id">
+                <tr class="hover:bg-slate-100/40 transition">
+                  <td class="px-4 py-3.5">
+                    <div class="font-semibold text-slate-900 text-sm" x-text="d.title"></div>
+                    <div class="text-xs text-slate-500 mt-0.5 line-clamp-1" x-text="d.summary"></div>
+                  </td>
+                  <td class="px-4 py-3.5">
+                    <span class="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs font-mono font-medium" x-text="d.stage"></span>
+                  </td>
+                  <td class="px-4 py-3.5">
+                    <span 
+                      class="px-2 py-0.5 rounded text-xs font-bold uppercase"
+                      :class="d.severity === 'HIGH' ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'"
+                      x-text="d.severity">
+                    </span>
+                  </td>
+                  <td class="px-4 py-3.5 font-bold text-red-600" x-text="formatCurrency(d.financial_impact)"></td>
+                  <td class="px-4 py-3.5 text-xs text-indigo-300 font-mono" x-text="d.relevant_clause || 'Standard Terms'"></td>
+                  <td class="px-4 py-3.5 text-right space-x-2">
+                    <button 
+                      @click="openInvestigation(d)"
+                      class="px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-500 text-slate-900 rounded-lg text-xs font-semibold shadow transition inline-flex items-center space-x-1">
+                      <i data-lucide="search-check" class="w-3.5 h-3.5"></i>
+                      <span>Investigate</span>
+                    </button>
+                    <button 
+                      @click="triggerNoticeGeneration(d)"
+                      class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-700 rounded-lg text-xs font-medium transition inline-flex items-center space-x-1"
+                      title="Generate Recovery Demand Notice">
+                      <i data-lucide="mail" class="w-3.5 h-3.5 text-emerald-600"></i>
+                      <span>Notice</span>
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- TAB 2: CONTRACT & RULES STUDIO -->
+      <div x-show="activeTab === 'contract'" class="space-y-6" x-cloak>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="scroll-text" class="w-4 h-4 text-indigo-600"></i>
+                <h3 class="text-sm font-semibold text-slate-900">Master Agreement Contract Clauses</h3>
+              </div>
+              <span class="text-xs text-slate-500 font-mono" x-text="currentContract?.contract_id"></span>
+            </div>
+            <div class="mt-4 flex-1 bg-slate-50 p-4 rounded-lg font-mono text-xs text-slate-700 overflow-y-auto max-h-[420px] whitespace-pre-wrap leading-relaxed border border-slate-200/80" x-text="currentContract?.raw_text">
+            </div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="cpu" class="w-4 h-4 text-emerald-600"></i>
+                <h3 class="text-sm font-semibold text-slate-900">Parsed Business Rules (Contract Agent)</h3>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-300 border border-emerald-800 font-semibold" x-text="(currentContract?.rules?.length || 0) + ' Rules Extracted'"></span>
+            </div>
+            <div class="mt-4 space-y-3 overflow-y-auto max-h-[420px] pr-1">
+              <template x-for="r in currentContract?.rules" :key="r.rule_id">
+                <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-2 hover:border-slate-700 transition">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-900" x-text="r.description"></span>
+                    <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-100 text-indigo-300 border border-indigo-800" x-text="r.rule_type"></span>
+                  </div>
+                  <p class="text-xs text-slate-500 italic bg-white/60 p-2 rounded border border-slate-200/50" x-text="r.clause_text"></p>
+                  <div class="flex items-center justify-between text-[11px] text-slate-500 font-mono pt-1">
+                    <span class="text-indigo-600" x-text="r.clause_reference"></span>
+                    <template x-if="r.unit_price">
+                      <span class="text-emerald-600 font-bold" x-text="'Rate: ' + formatCurrency(r.unit_price)"></span>
+                    </template>
+                    <template x-if="r.min_commitment">
+                      <span class="text-yellow-400 font-bold" x-text="'Min Commitment: ' + r.min_commitment.toLocaleString() + ' units'"></span>
+                    </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- TAB 3: TRANSACTION DATA HUB -->
+      <div x-show="activeTab === 'transactions'" class="space-y-4" x-cloak>
+        <div class="flex items-center justify-between">
+          <div class="flex space-x-2 bg-white p-1 rounded-lg border border-slate-200 text-xs">
+            <button 
+              @click="transactionSubTab = 'orders'" 
+              :class="transactionSubTab === 'orders' ? 'bg-indigo-600 text-white text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-900'"
+              class="px-3 py-1.5 rounded-md transition">Purchase Orders</button>
+            <button 
+              @click="transactionSubTab = 'deliveries'" 
+              :class="transactionSubTab === 'deliveries' ? 'bg-indigo-600 text-white text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-900'"
+              class="px-3 py-1.5 rounded-md transition">Deliveries / Telemetry</button>
+            <button 
+              @click="transactionSubTab = 'invoices'" 
+              :class="transactionSubTab === 'invoices' ? 'bg-indigo-600 text-white text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-900'"
+              class="px-3 py-1.5 rounded-md transition">Sales Invoices</button>
+            <button 
+              @click="transactionSubTab = 'payments'" 
+              :class="transactionSubTab === 'payments' ? 'bg-indigo-600 text-white text-slate-900 font-semibold' : 'text-slate-500 hover:text-slate-900'"
+              class="px-3 py-1.5 rounded-md transition">Payment Receipts</button>
+          </div>
+          <span class="text-xs text-slate-500">Complete connected ledger across 5 stages</span>
+        </div>
+        <!-- Orders Table -->
+        <div x-show="transactionSubTab === 'orders'" class="bg-white border border-slate-200 rounded-xl overflow shadow-xs-x-auto shadow-sm">
+          <table class="w-full text-left text-sm text-slate-700">
+            <thead class="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="px-4 py-3">PO Order ID</th>
+                <th class="px-4 py-3">Date</th>
+                <th class="px-4 py-3">SKU</th>
+                <th class="px-4 py-3">Quantity</th>
+                <th class="px-4 py-3">Order Price</th>
+                <th class="px-4 py-3">Contract Rate</th>
+                <th class="px-4 py-3">Total Value</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-mono text-xs">
+              <template x-for="o in currentScenario?.orders" :key="o.order_id">
+                <tr class="hover:bg-slate-100/30">
+                  <td class="px-4 py-2.5 font-bold text-slate-900" x-text="o.order_id"></td>
+                  <td class="px-4 py-2.5 text-slate-500" x-text="o.order_date"></td>
+                  <td class="px-4 py-2.5 text-indigo-300" x-text="o.sku"></td>
+                  <td class="px-4 py-2.5 text-slate-800" x-text="o.quantity.toLocaleString()"></td>
+                  <td class="px-4 py-2.5" :class="o.order_price < o.contracted_price ? 'text-red-600 font-bold' : 'text-slate-700'" x-text="formatCurrency(o.order_price)"></td>
+                  <td class="px-4 py-2.5 text-slate-500" x-text="formatCurrency(o.contracted_price)"></td>
+                  <td class="px-4 py-2.5 text-slate-900 font-semibold" x-text="formatCurrency(o.total_amount)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <!-- Deliveries Table -->
+        <div x-show="transactionSubTab === 'deliveries'" class="bg-white border border-slate-200 rounded-xl overflow shadow-xs-x-auto shadow-sm">
+          <table class="w-full text-left text-sm text-slate-700">
+            <thead class="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="px-4 py-3">Delivery ID</th>
+                <th class="px-4 py-3">Order Ref</th>
+                <th class="px-4 py-3">Date</th>
+                <th class="px-4 py-3">Challan / Ref</th>
+                <th class="px-4 py-3">SKU</th>
+                <th class="px-4 py-3">Delivered Qty</th>
+                <th class="px-4 py-3">Warehouse / Source</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-mono text-xs">
+              <template x-for="d in currentScenario?.deliveries" :key="d.delivery_id">
+                <tr class="hover:bg-slate-100/30">
+                  <td class="px-4 py-2.5 font-bold text-slate-900" x-text="d.delivery_id"></td>
+                  <td class="px-4 py-2.5 text-indigo-600" x-text="d.order_id"></td>
+                  <td class="px-4 py-2.5 text-slate-500" x-text="d.delivery_date"></td>
+                  <td class="px-4 py-2.5 text-amber-300 font-semibold" x-text="d.challan_number"></td>
+                  <td class="px-4 py-2.5 text-indigo-300" x-text="d.sku"></td>
+                  <td class="px-4 py-2.5 text-emerald-600 font-bold" x-text="d.delivered_quantity.toLocaleString()"></td>
+                  <td class="px-4 py-2.5 text-slate-500" x-text="d.warehouse_ref"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <!-- Invoices Table -->
+        <div x-show="transactionSubTab === 'invoices'" class="bg-white border border-slate-200 rounded-xl overflow shadow-xs-x-auto shadow-sm">
+          <table class="w-full text-left text-sm text-slate-700">
+            <thead class="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="px-4 py-3">Invoice ID</th>
+                <th class="px-4 py-3">Delivery Ref</th>
+                <th class="px-4 py-3">Invoice Date</th>
+                <th class="px-4 py-3">Billed Qty</th>
+                <th class="px-4 py-3">Billed Rate</th>
+                <th class="px-4 py-3">Discount</th>
+                <th class="px-4 py-3">Invoice Total</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-mono text-xs">
+              <template x-for="i in currentScenario?.invoices" :key="i.invoice_id">
+                <tr class="hover:bg-slate-100/30">
+                  <td class="px-4 py-2.5 font-bold text-slate-900" x-text="i.invoice_id"></td>
+                  <td class="px-4 py-2.5 text-indigo-600" x-text="i.delivery_id"></td>
+                  <td class="px-4 py-2.5 text-slate-500" x-text="i.invoice_date"></td>
+                  <td class="px-4 py-2.5 text-slate-900" x-text="i.billed_quantity.toLocaleString()"></td>
+                  <td class="px-4 py-2.5 text-slate-700" x-text="formatCurrency(i.unit_price)"></td>
+                  <td class="px-4 py-2.5" :class="i.applied_discount_pct > 0 ? 'text-red-600 font-bold' : 'text-slate-500'" x-text="i.applied_discount_pct + '%'"></td>
+                  <td class="px-4 py-2.5 font-bold text-emerald-600" x-text="formatCurrency(i.total_amount)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <!-- Payments Table -->
+        <div x-show="transactionSubTab === 'payments'" class="bg-white border border-slate-200 rounded-xl overflow shadow-xs-x-auto shadow-sm">
+          <table class="w-full text-left text-sm text-slate-700">
+            <thead class="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="px-4 py-3">Payment ID</th>
+                <th class="px-4 py-3">Invoice Ref</th>
+                <th class="px-4 py-3">Payment Date</th>
+                <th class="px-4 py-3">Amount Due</th>
+                <th class="px-4 py-3">Amount Remitted</th>
+                <th class="px-4 py-3">Shortfall Deficit</th>
+                <th class="px-4 py-3">Bank Reference</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-mono text-xs">
+              <template x-for="p in currentScenario?.payments" :key="p.payment_id">
+                <tr class="hover:bg-slate-100/30">
+                  <td class="px-4 py-2.5 font-bold text-slate-900" x-text="p.payment_id"></td>
+                  <td class="px-4 py-2.5 text-indigo-600" x-text="p.invoice_id"></td>
+                  <td class="px-4 py-2.5 text-slate-500" x-text="p.payment_date"></td>
+                  <td class="px-4 py-2.5 text-slate-700" x-text="formatCurrency(p.amount_due)"></td>
+                  <td class="px-4 py-2.5 font-bold" :class="p.shortfall_amount > 0 ? 'text-amber-700' : 'text-emerald-600'" x-text="formatCurrency(p.amount_paid)"></td>
+                  <td class="px-4 py-2.5 font-bold text-red-600" x-text="p.shortfall_amount > 0 ? formatCurrency(p.shortfall_amount) : '₹0.00'"></td>
+                  <td class="px-4 py-2.5 text-slate-500" x-text="p.bank_reference"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+  <!-- KEY FEATURE 2: MODAL / DRAWER FOR DEEP AI INVESTIGATION & "ASK WHY?" -->
+  <div 
+    x-show="showInvestigationModal" 
+    class="fixed inset-0 z-50 overflow-y-auto bg-slate-50/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+    x-cloak>
+    <div 
+      class="bg-white border border-slate-200 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      @click.away="showInvestigationModal = false">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white/20 text-indigo-600 border border-indigo-500/30 flex items-center justify-center">
+            <i data-lucide="scan-search" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <span>Forensic AI Investigation Report</span>
+              <span class="px-2 py-0.5 rounded-full bg-red-100 text-red-300 text-xs font-mono font-bold" x-text="formatCurrency(currentInvestigation?.financial_impact || 0) + ' Leakage'"></span>
+            </h3>
+            <p class="text-xs text-slate-500" x-text="'Target Discrepancy: ' + (activeDiscrepancy?.title || '')"></p>
+          </div>
+        </div>
+        <button @click="showInvestigationModal = false" class="text-slate-500 hover:text-slate-900">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-6 overflow-y-auto space-y-6 flex-1 text-slate-700 text-sm">
+        <!-- Root Cause Card -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="px-2 py-0.5 rounded bg-indigo-900/60 text-indigo-300 text-xs font-mono font-bold uppercase" x-text="currentInvestigation?.root_cause_category"></span>
+              <span class="text-xs text-emerald-600 font-semibold" x-text="'Confidence: ' + Math.round((currentInvestigation?.confidence_score || 0.95)*100) + '%'"></span>
+            </div>
+            <span class="text-xs text-amber-700 font-mono font-semibold" x-text="currentInvestigation?.systemic_scope"></span>
+          </div>
+          <p class="text-slate-800 text-sm leading-relaxed" x-text="currentInvestigation?.root_cause_explanation"></p>
+        </div>
+        <!-- 5-Whys Recursive Root Cause Analysis -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center">
+              <i data-lucide="git-commit" class="w-4 h-4 mr-1.5 text-indigo-600"></i>
+              <span>Interactive 5-Whys Forensic Root Cause Chain</span>
+            </h4>
+            <span class="text-[11px] text-slate-500">Root Cause Decomposition</span>
+          </div>
+          <div class="space-y-2">
+            <template x-for="why in currentInvestigation?.five_whys" :key="why.level">
+              <div class="bg-slate-50/70 border border-slate-200/80 rounded-xl p-3.5 space-y-1.5 hover:border-slate-700 transition">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-indigo-300 flex items-center space-x-1.5">
+                    <span class="w-4 h-4 rounded-full bg-indigo-900 text-indigo-300 flex items-center justify-center text-[10px]" x-text="why.level"></span>
+                    <span x-text="why.question"></span>
+                  </span>
+                  <span class="text-[10px] text-slate-500 font-mono px-2 py-0.5 rounded bg-white border border-slate-200" x-text="why.evidence_source"></span>
+                </div>
+                <div class="text-xs text-slate-800 pl-5 font-medium" x-text="'→ ' + why.answer"></div>
+                <div class="text-[11px] text-slate-500 pl-5" x-text="why.detail"></div>
+              </div>
+            </template>
+          </div>
+        </div>
+        <!-- Split Evidence Viewer -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+            <div class="text-xs font-bold text-indigo-600 uppercase tracking-wider flex items-center">
+              <i data-lucide="scale" class="w-3.5 h-3.5 mr-1.5"></i>
+              <span>Contractual Rule Entitlement</span>
+            </div>
+            <div class="text-xs text-slate-700 font-mono bg-white/80 p-3 rounded border border-slate-200/60 leading-relaxed" x-text="currentInvestigation?.contract_clause_citation"></div>
+          </div>
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+            <div class="text-xs font-bold text-red-600 uppercase tracking-wider flex items-center">
+              <i data-lucide="file-warning" class="w-3.5 h-3.5 mr-1.5"></i>
+              <span>Operational Execution Evidence</span>
+            </div>
+            <div class="text-xs text-slate-700 font-mono bg-white/80 p-3 rounded border border-slate-200/60 leading-relaxed" x-text="currentInvestigation?.evidence_trail?.[currentInvestigation?.evidence_trail.length - 1]?.snippet || 'Evidence records matched'"></div>
+          </div>
+        </div>
+        <!-- KEY FEATURE: INTERACTIVE ASK WHY CHAT -->
+        <div class="bg-slate-50 border border-indigo-900/50 rounded-xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="message-square" class="w-4 h-4 text-indigo-600"></i>
+              <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Ask Why? — Interrogate This Leakage</span>
+            </div>
+            <span class="text-[10px] text-slate-500 font-mono" x-text="isGeminiConfigured ? 'Powered by Gemini 3.8 Flash' : 'Expert Forensic Logic'"></span>
+          </div>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <button 
+              @click="askWhyCustom('Why wasn\'t this invoiced?')"
+              class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-700 rounded-lg transition">
+              "Why wasn't this invoiced?"
+            </button>
+            <button 
+              @click="askWhyCustom('Which contract clause entitles us to recover this?')"
+              class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-700 rounded-lg transition">
+              "Which contract clause entitles us?"
+            </button>
+            <button 
+              @click="askWhyCustom('Is this discrepancy isolated or systemic across other transactions?')"
+              class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-700 rounded-lg transition">
+              "Is this isolated or systemic?"
+            </button>
+            <button 
+              @click="askWhyCustom('What immediate actions should finance take?')"
+              class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-700 rounded-lg transition">
+              "What actions should finance take?"
+            </button>
+          </div>
+          <div class="flex space-x-2">
+            <input 
+              type="text" 
+              x-model="customWhyQuestion" 
+              @keydown.enter="askWhyCustom(customWhyQuestion)"
+              placeholder="Ask any question about this financial gap or evidence..." 
+              class="flex-1 bg-white border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-500">
+            <button 
+              @click="askWhyCustom(customWhyQuestion)"
+              :disabled="askingWhy"
+              class="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 text-slate-900 rounded-lg text-xs font-semibold flex items-center space-x-1 transition shadow">
+              <span x-text="askingWhy ? 'Analyzing...' : 'Ask Why?'"></span>
+              <i data-lucide="send" class="w-3 h-3 ml-1"></i>
+            </button>
+          </div>
+          <div x-show="customWhyAnswer" class="bg-indigo-100/40 border border-indigo-800/60 rounded-lg p-3.5 space-y-1.5" x-cloak>
+            <div class="flex items-center justify-between text-xs text-indigo-600 font-semibold">
+              <span class="flex items-center"><i data-lucide="sparkles" class="w-3.5 h-3.5 mr-1"></i> AI Forensic Investigator Answer:</span>
+              <span class="text-[10px] text-slate-500 font-mono" x-text="customWhyAnswerSource"></span>
+            </div>
+            <p class="text-xs text-slate-800 leading-relaxed whitespace-pre-wrap" x-text="customWhyAnswer"></p>
+          </div>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div class="text-xs text-slate-500">
+          Statute of limitations active. Recommended recovery protocol certified.
+        </div>
+        <div class="flex items-center space-x-3">
+          <button 
+            @click="triggerNoticeGeneration(activeDiscrepancy)"
+            class="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-500 text-slate-900 rounded-lg text-xs font-semibold shadow transition flex items-center space-x-1.5">
+            <i data-lucide="mail-check" class="w-4 h-4"></i>
+            <span>Generate Recovery Demand Letter</span>
+          </button>
+          <button 
+            @click="showInvestigationModal = false"
+            class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- MODAL: RECOVERY DEMAND NOTICE VIEW -->
+  <div 
+    x-show="showNoticeModal" 
+    class="fixed inset-0 z-50 overflow-y-auto bg-slate-50/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+    x-cloak>
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" @click.away="showNoticeModal = false">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="mail" class="w-5 h-5 text-emerald-600"></i>
+          <h3 class="text-base font-bold text-slate-900">Commercial Recovery Notice & Itemized Demand</h3>
+        </div>
+        <button @click="showNoticeModal = false" class="text-slate-500 hover:text-slate-900">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-6 overflow-y-auto space-y-6 flex-1 text-slate-700 text-sm">
+        <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 font-mono text-xs whitespace-pre-wrap text-slate-800 leading-relaxed shadow-inner" x-text="currentNotice?.formal_letter_body">
+        </div>
+        <div class="bg-indigo-100/30 p-4 rounded-xl border border-indigo-800/60 font-mono text-xs text-indigo-200 whitespace-pre-wrap">
+          <div class="font-bold text-indigo-600 uppercase tracking-wider mb-2">Ops Directives for Billing Department</div>
+          <span x-text="currentNotice?.internal_erp_directive"></span>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        <span class="text-xs text-slate-500">Claim Amount: <strong class="text-emerald-600 font-mono text-sm" x-text="formatCurrency(currentNotice?.total_claim_amount || 0)"></strong></span>
+        <div class="flex space-x-2">
+          <button @click="copyNoticeText()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-lg text-xs font-semibold transition flex items-center space-x-1">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span x-text="copiedNotice ? 'Copied!' : 'Copy Letter'"></span>
+          </button>
+          <button @click="showNoticeModal = false" class="px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-500 text-slate-900 rounded-lg text-xs font-semibold transition">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EXECUTIVE AUDIT REPORT -->
+  <div 
+    x-show="showAuditModal" 
+    class="fixed inset-0 z-50 overflow-y-auto bg-slate-50/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+    x-cloak>
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" @click.away="showAuditModal = false">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="file-check" class="w-5 h-5 text-indigo-600"></i>
+          <h3 class="text-base font-bold text-slate-900">Executive Audit Brief & Certification</h3>
+        </div>
+        <button @click="showAuditModal = false" class="text-slate-500 hover:text-slate-900">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-6 overflow-y-auto space-y-4 flex-1 text-slate-700 text-sm">
+        <div class="bg-slate-50 p-6 rounded-xl border border-slate-200 font-mono text-xs whitespace-pre-wrap text-slate-800 leading-relaxed shadow-inner" x-text="auditReportMarkdown">
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end space-x-3">
+        <button @click="copyAuditText()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-lg text-xs font-semibold transition flex items-center space-x-1">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+          <span x-text="copiedAudit ? 'Copied!' : 'Copy Markdown'"></span>
+        </button>
+        <button @click="showAuditModal = false" class="px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-500 text-slate-900 rounded-lg text-xs font-semibold transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SETTINGS & GEMINI API KEY -->
+  <div 
+    x-show="showApiKeyModal" 
+    class="fixed inset-0 z-50 overflow-y-auto bg-slate-50/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+    x-cloak>
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden" @click.away="showApiKeyModal = false">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="key" class="w-5 h-5 text-indigo-600"></i>
+          <h3 class="text-sm font-bold text-slate-900">Gemini 3.8 Flash Configuration</h3>
+        </div>
+        <button @click="showApiKeyModal = false" class="text-slate-500 hover:text-slate-900">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-6 space-y-4 text-sm text-slate-700">
+        <p class="text-xs text-slate-500 leading-relaxed">
+          The system includes a built-in deterministic expert forensic engine that runs 100% offline. To activate real-time multimodal LLM reasoning on custom uploaded contracts, provide your Gemini API key below:
+        </p>
+        <div class="space-y-1">
+          <label class="text-xs font-semibold text-slate-700">Gemini API Key</label>
+          <input 
+            type="password" 
+            x-model="apiKeyInput" 
+            placeholder="AIzaSy..." 
+            class="w-full bg-slate-50 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-mono">
+        </div>
+        <div class="p-3 bg-indigo-100/30 border border-indigo-800/50 rounded-lg text-xs text-indigo-300 flex items-center space-x-2">
+          <i data-lucide="info" class="w-4 h-4 text-indigo-600 flex-shrink-0"></i>
+          <span>Keys are stored in-memory for the duration of the server session.</span>
+        </div>
+      </div>
+      <div class="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end space-x-2">
+        <button @click="showApiKeyModal = false" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold">Cancel</button>
+        <button @click="saveApiKey()" class="px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-500 text-slate-900 rounded-lg text-xs font-semibold">Save & Activate</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function c2cApp() {
+      return {
+        scenarios: [],
+        selectedCustomerId: 'CUST-APEX-01',
+        currentScenario: null,
+        currentContract: null,
+        metrics: { contracted_value: 0, ordered_value: 0, delivered_value: 0, invoiced_value: 0, collected_value: 0, total_leakage_detected: 0, recoverable_potential: 0, discrepancy_count: 0 },
+        stages: [],
+        discrepancies: [],
+        loading: true,
+        activeTab: 'discrepancies',
+        transactionSubTab: 'orders',
+        showInvestigationModal: false,
+        activeDiscrepancy: null,
+        currentInvestigation: null,
+        customWhyQuestion: '',
+        customWhyAnswer: '',
+        customWhyAnswerSource: '',
+        askingWhy: false,
+        showNoticeModal: false,
+        currentNotice: null,
+        copiedNotice: false,
+        showAuditModal: false,
+        auditReportMarkdown: '',
+        copiedAudit: false,
+        showApiKeyModal: false,
+        apiKeyInput: '',
+        isGeminiConfigured: false,
+
+        async initApp() {
+          try {
+            const healthRes = await fetch('/api/health');
+            const health = await healthRes.json();
+            this.isGeminiConfigured = health.gemini_configured;
+            const scenariosRes = await fetch('/api/scenarios');
+            this.scenarios = await scenariosRes.json();
+            if (this.scenarios.length > 0) {
+              this.selectedCustomerId = this.scenarios[0].customer_id;
+              await this.loadScenario(this.selectedCustomerId);
+            }
+          } catch (e) {
+            console.error('Failed to init app:', e);
+          } finally {
+            this.loading = false;
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async loadScenario(customerId) {
+          this.loading = true;
+          try {
+            const [detailRes, reconRes] = await Promise.all([
+              fetch(`/api/scenarios/${customerId}`),
+              fetch(`/api/reconciliation/${customerId}`)
+            ]);
+            this.currentScenario = await detailRes.json();
+            this.currentContract = this.currentScenario.contract;
+            const reconData = await reconRes.json();
+            this.metrics = reconData.metrics;
+            this.stages = reconData.stages;
+            this.discrepancies = reconData.discrepancies;
+          } catch (e) {
+            console.error('Failed to load scenario:', e);
+          } finally {
+            this.loading = false;
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async openInvestigation(discrepancy) {
+          this.activeDiscrepancy = discrepancy;
+          this.customWhyQuestion = '';
+          this.customWhyAnswer = '';
+          try {
+            const res = await fetch('/api/investigate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ customer_id: this.selectedCustomerId, discrepancy_id: discrepancy.discrepancy_id })
+            });
+            this.currentInvestigation = await res.json();
+            this.showInvestigationModal = true;
+          } catch (e) {
+            console.error('Failed to run investigation:', e);
+          } finally {
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        investigateStage(stage) {
+          if (stage.discrepancy_ids && stage.discrepancy_ids.length > 0) {
+            const targetId = stage.discrepancy_ids[0];
+            const target = this.discrepancies.find(d => d.discrepancy_id === targetId);
+            if (target) {
+              this.openInvestigation(target);
+              return;
+            }
+          }
+          if (this.discrepancies.length > 0) {
+            this.openInvestigation(this.discrepancies[0]);
+          }
+        },
+
+        investigateFirstDiscrepancy() {
+          if (this.discrepancies.length > 0) {
+            this.openInvestigation(this.discrepancies[0]);
+          }
+        },
+
+        async askWhyCustom(q) {
+          if (!q || !q.trim() || !this.activeDiscrepancy) return;
+          this.customWhyQuestion = q;
+          this.askingWhy = true;
+          try {
+            const res = await fetch('/api/ask-why', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ customer_id: this.selectedCustomerId, discrepancy_id: this.activeDiscrepancy.discrepancy_id, question: q })
+            });
+            const data = await res.json();
+            this.customWhyAnswer = data.answer;
+            this.customWhyAnswerSource = data.source;
+          } catch (e) {
+            this.customWhyAnswer = 'Forensic inquiry failed: ' + e;
+          } finally {
+            this.askingWhy = false;
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async triggerNoticeGeneration(discrepancy) {
+          try {
+            const res = await fetch('/api/actions/generate-notice', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ customer_id: this.selectedCustomerId, discrepancy_id: discrepancy.discrepancy_id })
+            });
+            this.currentNotice = await res.json();
+            this.copiedNotice = false;
+            this.showNoticeModal = true;
+          } catch (e) {
+            console.error('Failed to generate notice:', e);
+          } finally {
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async openAuditReport() {
+          try {
+            const res = await fetch('/api/actions/audit-report');
+            const data = await res.json();
+            this.auditReportMarkdown = data.markdown;
+            this.copiedAudit = false;
+            this.showAuditModal = true;
+          } catch (e) {
+            console.error('Failed to get audit report:', e);
+          } finally {
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async saveApiKey() {
+          if (!this.apiKeyInput.trim()) return;
+          try {
+            const res = await fetch('/api/settings/api-key', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ api_key: this.apiKeyInput.trim() })
+            });
+            const data = await res.json();
+            this.isGeminiConfigured = data.configured;
+            this.showApiKeyModal = false;
+          } catch (e) {
+            console.error('Failed to update API key:', e);
+          }
+        },
+
+        copyNoticeText() {
+          if (!this.currentNotice) return;
+          navigator.clipboard.writeText(this.currentNotice.formal_letter_body);
+          this.copiedNotice = true;
+          setTimeout(() => this.copiedNotice = false, 2500);
+        },
+
+        copyAuditText() {
+          navigator.clipboard.writeText(this.auditReportMarkdown);
+          this.copiedAudit = true;
+          setTimeout(() => this.copiedAudit = false, 2500);
+        },
+
+        formatCurrency(num) {
+          if (num === null || num === undefined) return '₹0.00';
+          const n = Number(num);
+          return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+        },
+
+        getJourneyDiagnostic() {
+          if (!this.discrepancies || this.discrepancies.length === 0) {
+            return 'Zero revenue leakage detected across lifecycle handovers.';
+          }
+          const highest = this.discrepancies.reduce((prev, cur) => (prev.financial_impact > cur.financial_impact) ? prev : cur);
+          return `Critical drop occurred at handover [${highest.stage}] causing ${this.formatCurrency(highest.financial_impact)} revenue leakage.`;
+        }
+      }
+    }
+  </script>
+</body>
 </html>

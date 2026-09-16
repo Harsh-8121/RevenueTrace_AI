@@ -1,69 +1,87 @@
-# RevenueTrace AI
+﻿# Contract-to-Cash AI Investigator
 
-RevenueTrace AI is an AI-powered Contract-to-Cash investigation platform that detects revenue leakage by tracing discrepancies across contracts, orders, deliveries, invoices, and payments.
+> **"Trace every rupee from contract to cash. Find what fell through the cracks."**
 
-## Features
+Contract-to-Cash AI Investigator is an enterprise-grade AI financial investigation platform that traces the complete journey of revenue across:
 
-- Contract-to-cash dashboard with portfolio metrics
-- Multi-contract investigation engine across order, delivery, billing, and collections gaps
-- Investigation history with evidence-backed findings and recommendations
-- Data import via JSON, CSV, or PDF upload
-- Optional LLM-enhanced executive summaries when `OPENAI_API_KEY` is configured
+$$\text{Contract} \longrightarrow \text{Order} \longrightarrow \text{Delivery/Usage} \longrightarrow \text{Invoice} \longrightarrow \text{Payment}$$
 
-## Project structure
+Traditional BI tools merely show that high-level numbers do not balance. This platform acts as an **AI financial forensic investigator** that reconciles operational reality against contractual entitlements, pinpoints root causes, cites exact contractual clauses and operational transactions, calculates financial leakage down to the rupee, and generates formal customer recovery demand notices.
 
-- `backend/` — FastAPI application, investigation engine, parsers, and seed data
-- `frontend/` — React dashboard
-- `api/index.py` — Vercel serverless entrypoint
-- `scripts/install.sh` — local dependency installation
+---
 
-## Local development
+## Key Features
 
+### 1. 🔍 Trace My Money (Interactive Journey Waterfall)
+- Visual step-by-step handover tracking:
+  - **Contracted Revenue** (e.g. ₹1.20 Cr)
+  - **Ordered** (e.g. ₹1.16 Cr)
+  - **Delivered / Consumed** (e.g. ₹1.15 Cr)
+  - **Invoiced** (e.g. ₹1.08 Cr)
+  - **Collected** (e.g. ₹1.01 Cr)
+- Clear financial leakage indicators at each handover step.
+- One-click **"Investigate this Gap"** button to jump directly into the AI root cause analysis.
+
+### 2. 🧠 "Ask Why?" 5-Whys Root Cause Engine
+- Deconstructs every discrepancy down to its operational and system failure:
+  - **Finding:** ₹10,00,000 potential unbilled revenue.
+  - **Why 1:** 1,000 delivered units were omitted from invoices.
+  - **Why 2:** The telemetry logs recorded usage under `SAAS-PRO-USER-V2`, but billing middleware queried legacy `SAAS-PRO-USER`.
+  - **Why 3:** Engineering upgraded the cluster without updating the ERP catalog mapping table.
+  - **Why 4:** Finance relied on automated billing without pre-bill telemetry reconciliation.
+  - **Why 5 (Systemic Scope):** Identical discrepancy discovered across 43 automated batch transactions in Q4 (total exposure: ₹30,00,000).
+- Interactive conversational interrogation: ask custom questions like *"Which clause entitles us to back-bill?"* and receive authoritative forensic answers.
+
+### 3. 🤖 Multi-Agent Architecture
+- **Contract Agent:** Parses master service agreements, extracting structured rules (rates, minimum commitments, tiered volume rebates, payment credit terms, and delay penalties) via Gemini 3.8 Flash or deterministic regex fallback.
+- **Reconciliation Agent:** Deterministic Python/Pandas mathematical engine ensuring zero financial hallucinations.
+- **Investigation Agent:** Cross-references evidence across contract clauses, purchase orders, delivery challans, tax invoices, and bank remittance advices.
+- **Action & Report Agent:** Formulates legally binding customer Recovery Demand Letters and generates comprehensive executive audit reports.
+
+---
+
+## Pre-Loaded Enterprise Scenarios
+
+1. **Apex Global Technologies (Enterprise SaaS & Cloud Infrastructure)**
+   - **Contract:** ₹1,000/seat/mo, 10,000 seat annual minimum commitment (₹1.20 Cr).
+   - **Leakage:** 10,500 active users delivered, but billing only invoiced 9,500 seats due to ERP SKU alias mismatch (`SAAS-PRO-USER-V2`).
+   - **Financial Impact:** ₹10,00,000 unbilled leakage + ₹7,00,000 unauthorized customer payment deduction.
+
+2. **Titan Heavy Industries (Industrial Equipment & Logistics)**
+   - **Contract:** ₹50,000/pump, 5% volume rebate strictly for orders > 100 units.
+   - **Leakage:** 15 pumps delivered on Challan `DC-8821` completely unbilled (₹7,50,000); unauthorized 12% rogue discount applied on Order 4 (₹2,70,000); short payment of ₹5,00,000.
+
+3. **Zenith Health Systems (Healthcare Diagnostic Networks)**
+   - **Contract:** ₹2,500/reagent kit with guaranteed annual commitment of 3,200 kits (₹80,00,000) or shortfall liquidated recovery.
+   - **Leakage:** Customer ordered only 2,600 kits (₹65,00,000). Finance failed to trigger the mandatory ₹15,00,000 Minimum Commitment Shortfall True-Up Invoice.
+
+---
+
+## Quickstart Guide
+
+### Prerequisites
+- Python 3.10+ (No Node.js or NPM required!)
+
+### Installation & Launch
 ```bash
-bash scripts/install.sh
-python3 -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-npm --prefix frontend run dev
+# 1. Clone or navigate to the repository
+cd contract-to-cash-investigator
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Launch the platform
+python run_app.py
 ```
 
-Open http://localhost:5173
+Open your browser at:
+- **Web Dashboard:** [http://127.0.0.1:8000](http://127.0.0.1:8000)
+- **Interactive API Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-## Deploy to Vercel
+---
 
-1. Import the GitHub repository in Vercel.
-2. Keep **Root Directory** as the repository root (`./`).
-3. Redeploy from the latest `main` branch.
-
-Optional environment variable:
-
-- `OPENAI_API_KEY` — enables LLM-enhanced investigation summaries
-
-## Data input formats
-
-### JSON
-
-Upload a file with a `contracts` array matching the structure in `backend/data/seed_contracts.json`.
-
-### CSV
-
-Required columns: `record_type`, `contract_id`, `customer_name`, `amount`
-
-Supported `record_type` values: `contract`, `order`, `delivery`, `invoice`, `payment`
-
-See `backend/data/sample_upload.csv` for an example.
-
-### PDF
-
-Upload a contract PDF. The parser extracts contract ID, customer, amounts, and payment terms heuristically.
-
-## API
-
-| Endpoint | Description |
-| --- | --- |
-| `GET /api/health` | Health check |
-| `GET /api/dashboard` | Portfolio metrics |
-| `GET /api/contracts` | List contracts |
-| `GET /api/contracts/{id}` | Contract detail |
-| `POST /api/investigations` | Run investigation |
-| `GET /api/investigations` | List investigations |
-| `GET /api/investigations/{id}` | Investigation detail |
-| `POST /api/uploads` | Import JSON, CSV, or PDF |
+## Technology Stack
+- **Backend:** Python 3.11, FastAPI, Uvicorn, Pydantic v2
+- **Data & Reconciliation:** Python, Pandas
+- **AI Core:** `google-genai` SDK (Gemini 3.8 Flash) with built-in Expert Forensic Fallback
+- **Frontend:** Responsive Single-Page Application (HTML5, Tailwind CSS, Alpine.js, Lucide Icons)
