@@ -35,6 +35,14 @@ npm --prefix frontend run dev
 
 Open http://localhost:5173 and run an investigation against the sample contract `CTR-1001`.
 
+## Deploy to Vercel
+
+1. Import the GitHub repository in Vercel.
+2. Leave **Root Directory** as the repository root (`./`).
+3. Vercel will use `vercel.json` to build the frontend and deploy the Python API under `/api`.
+
+The frontend is served from `frontend/dist`, and API routes are handled by the FastAPI app via `api/index.py`.
+
 ## API
 
 | Endpoint | Description |
