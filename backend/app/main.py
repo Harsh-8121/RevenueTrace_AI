@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import APIRouter, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .investigation import run_investigation
@@ -23,6 +23,7 @@ from .repository import (
 )
 
 app = FastAPI(title="RevenueTrace AI API", version="1.0.0")
+router = APIRouter()
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,12 +34,12 @@ app.add_middleware(
 )
 
 
-@app.get("/api/health")
+@router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "revenuetrace-ai"}
 
 
-@app.get("/api/dashboard", response_model=DashboardStats)
+@router.get("/dashboard", response_model=DashboardStats)
 def dashboard() -> DashboardStats:
     contracts = list_contracts()
     investigations = list_investigations()
@@ -58,12 +59,12 @@ def dashboard() -> DashboardStats:
     )
 
 
-@app.get("/api/contracts", response_model=list[ContractRecord])
+@router.get("/contracts", response_model=list[ContractRecord])
 def get_contracts() -> list[ContractRecord]:
     return list_contracts()
 
 
-@app.get("/api/contracts/{contract_id}", response_model=ContractRecord)
+@router.get("/contracts/{contract_id}", response_model=ContractRecord)
 def get_contract_by_id(contract_id: str) -> ContractRecord:
     contract = get_contract(contract_id)
     if contract is None:
@@ -71,7 +72,7 @@ def get_contract_by_id(contract_id: str) -> ContractRecord:
     return contract
 
 
-@app.get("/api/investigations", response_model=list[InvestigationSummary])
+@router.get("/investigations", response_model=list[InvestigationSummary])
 def get_investigations() -> list[InvestigationSummary]:
     summaries: list[InvestigationSummary] = []
     for item in list_investigations():
@@ -90,7 +91,7 @@ def get_investigations() -> list[InvestigationSummary]:
     return sorted(summaries, key=lambda item: item.created_at, reverse=True)
 
 
-@app.post("/api/investigations", response_model=Investigation)
+@router.post("/investigations", response_model=Investigation)
 def create_investigation(request: InvestigationRequest) -> Investigation:
     try:
         return run_investigation(request.contract_id, use_llm=request.use_llm)
@@ -98,7 +99,7 @@ def create_investigation(request: InvestigationRequest) -> Investigation:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@app.get("/api/investigations/{investigation_id}", response_model=Investigation)
+@router.get("/investigations/{investigation_id}", response_model=Investigation)
 def get_investigation_by_id(investigation_id: str) -> Investigation:
     investigation = get_investigation(investigation_id)
     if investigation is None:
@@ -106,7 +107,7 @@ def get_investigation_by_id(investigation_id: str) -> Investigation:
     return Investigation(**investigation)
 
 
-@app.post("/api/uploads", response_model=UploadResult)
+@router.post("/uploads", response_model=UploadResult)
 async def upload_contract_data(file: UploadFile = File(...)) -> UploadResult:
     content = await file.read()
     filename = file.filename or "upload"
@@ -135,3 +136,7 @@ async def upload_contract_data(file: UploadFile = File(...)) -> UploadResult:
         contracts_imported=len(contracts),
         contract_ids=[contract.contract_id for contract in contracts],
     )
+
+
+app.include_router(router, prefix="/api")
+app.include_router(router)
